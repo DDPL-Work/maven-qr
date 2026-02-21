@@ -7,7 +7,7 @@ import {
 } from "../../Data/dummyData";
 import { useDispatch, useSelector } from "react-redux";
 import { downloadQRPDF, generateQR } from "../../Redux/thunks/qrThunks";
-import { resetQRState } from "../../redux/slices/qrSlice";
+import { resetQRState } from "../../Redux/slices/qrSlice";
 import { calcProgress } from "../../services/Progressfix";
 import { useEffect } from "react";
 
