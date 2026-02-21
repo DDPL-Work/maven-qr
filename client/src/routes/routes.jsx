@@ -1,4 +1,5 @@
-import { createBrowserRouter } from "react-router-dom";
+// routes/routes.jsx
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Unauthorized from "../pages/Auth/Unauthorized";
 import ProtectedRoute from "./ProtectedRoute";
 import Layout from "../Layout/Layout";
@@ -6,7 +7,7 @@ import CreateCompanyQR from "../pages/CRMPanel/CreateCompanyQR";
 import Login from "../pages/Auth/Login";
 import NotFound from "./NotFound";
 
-export const appRouter = createBrowserRouter([
+const router = createBrowserRouter([
   {
     path: "/login",
     element: <Login />,
@@ -21,9 +22,15 @@ export const appRouter = createBrowserRouter([
       {
         path: "/",
         element: <Layout />,
-        children: [{ path: "/qr-generation", element: <CreateCompanyQR /> }],
+        children: [
+          { path: "/qr-generation", element: <CreateCompanyQR /> },
+        ],
       },
     ],
   },
   { path: "*", element: <NotFound /> },
 ]);
+
+export default function AppRoutes() {
+  return <RouterProvider router={router} />;
+}
