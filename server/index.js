@@ -49,8 +49,8 @@ const startServer = async () => {
       console.log(`🌍 Environment   : ${NODE_ENV}`);
       console.log(`🗄️  Database     :  ${dbConnection.connection.host}`);
       console.log(`🗄️  Database     :  ✅ Connected Successfully`);
-      console.log(`🔗 Base URL      : http://localhost:${PORT}`);
-      console.log(`📡 API Base      : http://localhost:${PORT}/api/v${APP_VERSION}`);
+      console.log(`🔗 Base URL      : https://maven-qr.onrender.com`);
+      console.log(`📡 API Base      : https://maven-qr.onrender.com/api/v${APP_VERSION}`);
       console.log("==================================================\n");
     });
 

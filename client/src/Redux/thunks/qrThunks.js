@@ -56,7 +56,7 @@ export const downloadQRPDF = createAsyncThunk(
     try {
       if (!token) throw new Error("Invalid token");
 
-      const response = await api.get(`/qr/download/${token}`, {cd 
+      const response = await api.get(`/qr/download/${token}`, {
         responseType: "blob",
       });
 
