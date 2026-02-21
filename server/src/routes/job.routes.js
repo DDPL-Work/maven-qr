@@ -12,7 +12,7 @@ const {
 // CLIENT or CRM create job
 router.post(
   "/",
-  auth,
+  auth.protectCRM,
   role("CLIENT", "CRM"),
   createJob
 );
@@ -20,7 +20,7 @@ router.post(
 // CRM approves job
 router.put(
   "/approve/:id",
-  auth,
+  auth.protectCRM,
   role("CRM"),
   approveJob
 );

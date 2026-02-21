@@ -1,5 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { generateQR, resolveQR } from "../thunks/qrThunks";
+import { downloadQRPDF, generateQR, resolveQR } from "../thunks/qrThunks";
 
 /*
 ========================================
@@ -10,6 +10,7 @@ const qrSlice = createSlice({
   name: "qr",
   initialState: {
     loading: false,
+    downloading: false,
     error: null,
 
     qrImage: null,
@@ -67,6 +68,21 @@ const qrSlice = createSlice({
       })
       .addCase(resolveQR.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===============================
+      // DOWNLOAD QR PDF
+      // ===============================
+      .addCase(downloadQRPDF.pending, (state) => {
+        state.downloading = true;
+        state.error = null;
+      })
+      .addCase(downloadQRPDF.fulfilled, (state) => {
+        state.downloading = false;
+      })
+      .addCase(downloadQRPDF.rejected, (state, action) => {
+        state.downloading = false;
         state.error = action.payload;
       });
   },

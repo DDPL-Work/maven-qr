@@ -6,42 +6,31 @@ const jobSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
+      index: true,
     },
 
-    // JOB DETAILS
-    designation: { type: String, required: true },
+    title: { type: String, required: true },
     department: String,
     jobType: String,
-    openings: Number,
+    workplaceType: String,
+
+    location: String,
     experience: String,
 
-    salaryMin: Number,
-    salaryMax: Number,
+    salaryMin: { type: Number, min: 0 },
+    salaryMax: { type: Number, min: 0 },
 
-    skills: String,
+    skills: [String],
+
     deadline: Date,
 
-    // CONTACT PERSON
-    contactPerson: String,
-    contactRole: String,
-
-    notes: String,
-
-    // APPROVAL WORKFLOW
-    approvalStatus: {
-      type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
-      default: "PENDING",
-    },
-
-    approvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+    description: String,
 
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+jobSchema.index({ companyId: 1, isActive: 1 });
 
 module.exports = mongoose.model("Job", jobSchema);

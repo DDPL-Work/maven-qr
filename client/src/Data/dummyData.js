@@ -1,4 +1,11 @@
-import { FiBriefcase, FiHome, FiMail, FiMapPin, FiStar } from "react-icons/fi";
+import {
+  FiBriefcase,
+  FiHome,
+  FiMail,
+  FiMapPin,
+  FiStar,
+  FiFileText,
+} from "react-icons/fi";
 
 /* ===============================
    INDUSTRIES
@@ -60,6 +67,7 @@ export const SECTIONS = Object.freeze([
   { title: "Company Info", icon: FiHome },
   { title: "Contact", icon: FiMail },
   { title: "Location", icon: FiMapPin },
+  { title: "About", icon: FiFileText },
   { title: "Job Details", icon: FiBriefcase },
-  //   { title: "Package & Extra", icon: FiStar },
+  { title: "Why Join Us", icon: FiStar },
 ]);

@@ -1,17 +1,16 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
+import { createSlice } from "@reduxjs/toolkit";
 import { loginUser, logoutUser } from "../thunks/authThunks";
 
 // ------------------------------------------------------------
 // INITIAL STATE
 // ------------------------------------------------------------
 const storedUser = sessionStorage.getItem("user");
-const storedToken = sessionStorage.getItem("token");
+const parsedUser = storedUser ? JSON.parse(storedUser) : null;
 
 const initialState = {
-  user: storedUser ? JSON.parse(storedUser) : null,
-  token: storedToken || null,
-  role: storedUser ? JSON.parse(storedUser).role : null,
+  user: parsedUser,
+  token: sessionStorage.getItem("token"),
+  role: parsedUser?.role || null,
   loading: false,
   error: null,
 };
@@ -42,10 +41,11 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload;
-        state.token = sessionStorage.getItem("token");
-        state.role = action.payload.role;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.role = action.payload.user.role;
       })
+
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;

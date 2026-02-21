@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { FiUser, FiEye, FiEyeOff } from "react-icons/fi";
 import { MdAdminPanelSettings } from "react-icons/md";
-import LogoImage from "../../assets/mavenLogo.svg";
+import LogoImage from "../../assets/maven-logo.svg";
 import { useDispatch, useSelector } from "react-redux";
-import { loginUser } from "../../features/slices/authSlice";
+import { loginUser } from "../../Redux/thunks/authThunks";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import LoginIllustration from "../../assets/Character.svg";
@@ -25,23 +25,14 @@ const Login = () => {
       return;
     }
 
-    const result = await dispatch(loginUser({ email, password, role }));
+    const result = await dispatch(loginUser({ email, password }));
 
     if (result.meta.requestStatus === "fulfilled") {
       toast.success("Login successful!");
 
-      const userRole = result.payload.role;
-      if (userRole === "RECRUITER") {
-        navigate("/recruiter/dashboard");
-      } else if (userRole === "ADMIN") {
-        navigate("/admin/dashboard");
-      } else {
-        toast.error("Unknown role detected");
-      }
-    }
-
-    if (result.meta.requestStatus === "rejected") {
-      toast.error(error || "Invalid credentials");
+      navigate("/qr-generation");
+    } else {
+      toast.error(result.payload || "Invalid credentials");
     }
   };
 
@@ -88,7 +79,7 @@ const Login = () => {
           </p>
 
           {/* ROLE SWITCH */}
-          <div className="flex bg-gray-100 rounded-lg p-1 mt-6">
+          {/* <div className="flex bg-gray-100 rounded-lg p-1 mt-6">
             <button
               onClick={() => setRole("RECRUITER")}
               className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-[Calibri]
@@ -108,7 +99,7 @@ const Login = () => {
               <MdAdminPanelSettings size={14} />
               Admin
             </button>
-          </div>
+          </div> */}
 
           {/* EMAIL */}
           <div className="mt-6">

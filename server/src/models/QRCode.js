@@ -6,18 +6,33 @@ const qrCodeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
+      index: true,
     },
 
     jobId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Job",
-      required: true,
+      default: null,
+      index: true,
     },
 
     token: {
       type: String,
       required: true,
       unique: true,
+      index: true,
+    },
+
+    qrImageUrl: {
+      type: String,
+    },
+
+    pdfUrl: {
+      type: String,
+    },
+
+    pdfPublicId: {
+      type: String,
     },
 
     scans: {
@@ -25,12 +40,17 @@ const qrCodeSchema = new mongoose.Schema(
       default: 0,
     },
 
-    isActive: { type: Boolean, default: true },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
 
     createdByCRM: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "CrmUser",
       required: true,
+      index: true,
     },
 
     expiresAt: {
@@ -38,7 +58,16 @@ const qrCodeSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+/*
+========================================
+AUTO DELETE AFTER EXPIRY (OPTIONAL)
+========================================
+If expiresAt is set, Mongo will auto delete
+the document when time is reached.
+*/
+qrCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model("QRCode", qrCodeSchema);

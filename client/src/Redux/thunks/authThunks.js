@@ -1,56 +1,44 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-const LOGIN_URL = `${BASE_URL}/auth/login`;
+import api from "../../services/api";
 
 // ------------------------------------------------------------
 // LOGIN
 // ------------------------------------------------------------
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
-  async ({ email, password, role }, { rejectWithValue }) => {
+  async ({ email, password }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(LOGIN_URL, { email, password, role });
-      const data = response.data;
+      const { data } = await api.post("/auth/login", {
+        email,
+        password,
+      });
 
       sessionStorage.setItem("token", data.token);
       sessionStorage.setItem("user", JSON.stringify(data.user));
 
-      return data.user;
+      return {
+        user: data.user,
+        token: data.token,
+      };
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.error || "Login failed. Try again."
-      );
+      return rejectWithValue(error.response?.data?.message || "Login failed");
     }
-  }
+  },
 );
 
 // ------------------------------------------------------------
-// LOGOUT  (NOW CALLS BACKEND)
+// LOGOUT
 // ------------------------------------------------------------
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const token = getState().auth.token;
-
-      await axios.post(
-        `${BASE_URL}/auth/logout`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
       sessionStorage.removeItem("token");
       sessionStorage.removeItem("user");
 
       return true;
-    } catch (err) {
-      return rejectWithValue("Logout failed.");
+    } catch (error) {
+      return rejectWithValue("Logout failed");
     }
-  }
+  },
 );

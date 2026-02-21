@@ -12,7 +12,7 @@ const {
 // FSE creates company
 router.post(
   "/",
-  auth,
+  auth.protectUser,
   role("FSE"),
   createCompany
 );
@@ -20,7 +20,7 @@ router.post(
 // CRM updates package
 router.put(
   "/:id/package",
-  auth,
+  auth.protectCRM,
   role("CRM"),
   updatePackage
 );

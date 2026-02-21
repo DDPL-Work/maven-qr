@@ -1,81 +1,300 @@
 import { useState } from "react";
-
 import {
-  FiBriefcase,
-  FiMapPin,
-  FiMail,
-  FiHome,
-  FiStar,
-  FiUser,
-  FiArrowLeft,
-  FiArrowRight,
-  FiDownload,
-  FiRefreshCw,
-  FiCheckCircle,
-  FiPackage,
-} from "react-icons/fi";
-import {
-  PACKAGES,
   INDUSTRIES,
   COMPANY_SIZES,
   JOB_TYPES,
   SECTIONS,
 } from "../../Data/dummyData";
+import { useDispatch, useSelector } from "react-redux";
+import { downloadQRPDF, generateQR } from "../../Redux/thunks/qrThunks";
+import { resetQRState } from "../../redux/slices/qrSlice";
+import { calcProgress } from "../../services/Progressfix";
+import { useEffect } from "react";
 
 export default function CreateCompanyQR() {
   const [formData, setFormData] = useState({
+    // ── Company Profile ──
     companyName: "",
     tagline: "",
     industry: "",
     companySize: "",
     foundedYear: "",
+    employeesCount: "", // NEW (used in overview)
+    headquarters: "", // NEW (HQ display)
+    website: "",
+    linkedIn: "",
+    activelyHiring: true, // NEW (used in hero badges)
+    openings: "", // NEW (used in hero badge)
+
+    // ── Contact Info ──
     email: "",
     phone: "",
     altPhone: "",
-    website: "",
-    linkedIn: "",
+
+    // ── Location ──
     country: "",
     region: "",
     city: "",
     zone: "",
     address: "",
     pincode: "",
-    designation: "",
-    department: "",
-    jobType: "",
+
+    // ── Job Details ──
     openings: "",
-    experience: "",
-    salaryMin: "",
-    salaryMax: "",
-    skills: "",
-    deadline: "",
-    packageType: "STANDARD",
+
+    // ── Additional Contact ──
     contactPerson: "",
     contactRole: "",
     notes: "",
+
+    // ── Company Content ──
+    about: "",
+    mission: "",
+    vision: "",
+
+    // ── Job Positions (Dynamic Array)
+    jobs: [
+      {
+        title: "",
+        department: "",
+        jobType: "",
+        location: "",
+        workplaceType: "", // Remote / Hybrid / Onsite
+        exp: "",
+        salaryMin: "",
+        salaryMax: "",
+        skills: [],
+        deadline: "",
+        description: "",
+      },
+    ],
+
+    // ── Why Join Us (Dynamic Array)
+    whyJoinUs: [
+      {
+        icon: "",
+        title: "",
+        desc: "",
+      },
+    ],
   });
 
   const [activeSection, setActiveSection] = useState(0);
-  const [qrPreview, setQrPreview] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+
+  const [showQR, setShowQR] = useState(false);
+
+  const dispatch = useDispatch();
+  const { loading, error, qrImage, redirectUrl, token, downloading } =
+    useSelector((state) => state.qr);
 
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const qrData = encodeURIComponent(
-      `Company:${formData.companyName}|Role:${formData.designation}|City:${formData.city}|Email:${formData.email}|Web:${formData.website}|Exp:${formData.experience}`,
-    );
-    setQrPreview(
-      `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${qrData}&color=1a3a6b&bgcolor=ffffff`,
-    );
-    setSubmitted(true);
+  useEffect(() => {
+    const maxJobs = Number(formData.openings || 0);
+
+    setFormData((prev) => {
+      let updatedJobs = [...prev.jobs];
+
+      if (maxJobs === 0) return prev;
+
+      // Trim if too many
+      if (updatedJobs.length > maxJobs) {
+        updatedJobs = updatedJobs.slice(0, maxJobs);
+      }
+
+      // Add if less
+      while (updatedJobs.length < maxJobs) {
+        updatedJobs.push({
+          title: "",
+          department: "",
+          jobType: "",
+          location: "",
+          workplaceType: "",
+          exp: "",
+          salaryMin: "",
+          salaryMax: "",
+          skills: [],
+          deadline: "",
+          description: "",
+        });
+      }
+
+      return { ...prev, jobs: updatedJobs };
+    });
+  }, [formData.openings]);
+
+  const validateForm = () => {
+    if (!formData.companyName.trim()) return "Company name is required";
+
+    if (!formData.industry) return "Industry is required";
+
+    if (!formData.email.match(/^\S+@\S+\.\S+$/)) return "Invalid email format";
+
+    if (!/^\d{7,15}$/.test(formData.phone)) return "Phone must be 7–15 digits";
+
+    if (!formData.city.trim()) return "City is required";
+
+    if (!formData.jobs[0]?.title.trim())
+      return "At least one job title is required";
+
+    return null;
   };
 
-  const filled = Object.values(formData).filter(Boolean).length;
-  const total = Object.keys(formData).length;
-  const progress = Math.round((filled / total) * 100);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const errorMsg = validateForm();
+    if (errorMsg) {
+      alert(errorMsg);
+      return;
+    }
+
+    const payload = {
+      company: {
+        name: formData.companyName,
+        tagline: formData.tagline,
+        industry: formData.industry,
+        size: formData.companySize,
+        founded: formData.foundedYear,
+        employees: formData.employeesCount,
+        headquarters: formData.headquarters || formData.city,
+        website: formData.website,
+        linkedIn: formData.linkedIn,
+        activelyHiring: formData.activelyHiring,
+        openings: formData.openings,
+        contact: {
+          email: formData.email,
+          phone: formData.phone,
+          altPhone: formData.altPhone,
+        },
+        location: {
+          country: formData.country,
+          region: formData.region,
+          city: formData.city,
+          zone: formData.zone,
+          address: formData.address,
+          pincode: formData.pincode,
+        },
+      },
+      metadata: {
+        contactPerson: formData.contactPerson,
+        contactRole: formData.contactRole,
+        notes: formData.notes,
+      },
+
+      about: formData.about,
+      mission: formData.mission,
+      vision: formData.vision,
+
+      jobs: formData.jobs,
+      whyJoinUs: formData.whyJoinUs.filter(
+        (item) => item.title.trim() || item.desc.trim() || item.icon.trim(),
+      ),
+    };
+
+    const result = await dispatch(generateQR(payload));
+
+    if (generateQR.fulfilled.match(result)) {
+      setShowQR(true); // 👈 Only show after success
+    }
+  };
+
+  const updateJob = (index, field, value) => {
+    const updated = [...formData.jobs];
+    updated[index][field] = value;
+    setFormData({ ...formData, jobs: updated });
+  };
+
+  const addJob = () => {
+    const maxJobs = Number(formData.openings || 0);
+
+    if (!maxJobs) {
+      alert("Please enter number of Open Roles first.");
+      return;
+    }
+
+    if (formData.jobs.length >= maxJobs) {
+      alert(`You can only add ${maxJobs} job role(s).`);
+      return;
+    }
+
+    setFormData({
+      ...formData,
+      jobs: [
+        ...formData.jobs,
+        {
+          title: "",
+          department: "",
+          jobType: "",
+          location: "",
+          workplaceType: "",
+          exp: "",
+          salaryMin: "",
+          salaryMax: "",
+          skills: [],
+          deadline: "",
+          description: "",
+        },
+      ],
+    });
+  };
+
+  const removeJob = (index) => {
+    const updated = formData.jobs.filter((_, i) => i !== index);
+    setFormData({ ...formData, jobs: updated });
+  };
+
+  const addSkill = (index, skill) => {
+    if (!skill.trim()) return;
+
+    const updated = [...formData.jobs];
+    const existingSkills = updated[index].skills;
+
+    if (!existingSkills.includes(skill.trim())) {
+      existingSkills.push(skill.trim());
+    }
+
+    setFormData({ ...formData, jobs: updated });
+  };
+
+  const removeSkill = (jobIndex, skillIndex) => {
+    const updated = [...formData.jobs];
+    updated[jobIndex].skills.splice(skillIndex, 1);
+    setFormData({ ...formData, jobs: updated });
+  };
+
+  const updateHighlight = (index, field, value) => {
+    const updated = [...formData.whyJoinUs];
+    updated[index][field] = value;
+    setFormData({ ...formData, whyJoinUs: updated });
+  };
+
+  const addHighlight = () => {
+    setFormData({
+      ...formData,
+      whyJoinUs: [...formData.whyJoinUs, { icon: "", title: "", desc: "" }],
+    });
+  };
+
+  const removeHighlight = (index) => {
+    const updated = [...formData.whyJoinUs];
+    updated.splice(index, 1);
+    setFormData({ ...formData, whyJoinUs: updated });
+  };
+
+  const handleNumberInput = (e) => {
+    const { name, value } = e.target;
+
+    if (!/^\d*$/.test(value)) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const progress = calcProgress(formData);
 
   const inp = `
     w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm text-gray-800
@@ -87,7 +306,7 @@ export default function CreateCompanyQR() {
   return (
     <div
       style={{ fontFamily: "'Plus Jakarta Sans', 'DM Sans', sans-serif" }}
-      className="w-full"
+      className="w-full mt-10"
     >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -239,11 +458,45 @@ export default function CreateCompanyQR() {
                       <input
                         name="foundedYear"
                         value={formData.foundedYear}
-                        onChange={handleChange}
-                        type="number"
-                        min="1800"
-                        max="2025"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={4}
+                        onChange={handleNumberInput}
                         placeholder="e.g. 2015"
+                        className={inp}
+                      />
+                    </F>
+
+                    <F label="Employees Count">
+                      <input
+                        name="employeesCount"
+                        value={formData.employeesCount}
+                        onChange={handleNumberInput}
+                        placeholder="e.g. 1,001–5,000"
+                        className={inp}
+                      />
+                    </F>
+
+                    <F label="Headquarters">
+                      <input
+                        name="headquarters"
+                        value={formData.headquarters}
+                        onChange={handleChange}
+                        placeholder="e.g. Bengaluru, Karnataka"
+                        className={inp}
+                      />
+                    </F>
+
+                    <F label="Open Roles">
+                      <input
+                        name="openings"
+                        value={formData.openings}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={handleNumberInput}
+                        placeholder="e.g. 47"
                         className={inp}
                       />
                     </F>
@@ -274,9 +527,10 @@ export default function CreateCompanyQR() {
                       <input
                         name="phone"
                         value={formData.phone}
-                        onChange={handleChange}
+                        onChange={handleNumberInput}
                         type="tel"
-                        placeholder="+91 98765 43210"
+                        maxLength={10}
+                        placeholder="98765 43210"
                         required
                         className={inp}
                       />
@@ -285,9 +539,10 @@ export default function CreateCompanyQR() {
                       <input
                         name="altPhone"
                         value={formData.altPhone}
-                        onChange={handleChange}
+                        onChange={handleNumberInput}
                         type="tel"
-                        placeholder="+91 98765 00000"
+                        maxLength={10}
+                        placeholder="98765 00000"
                         className={inp}
                       />
                     </F>
@@ -374,7 +629,7 @@ export default function CreateCompanyQR() {
                       <input
                         name="pincode"
                         value={formData.pincode}
-                        onChange={handleChange}
+                        onChange={handleNumberInput}
                         placeholder="e.g. 248001"
                         className={inp}
                       />
@@ -383,177 +638,368 @@ export default function CreateCompanyQR() {
                 </div>
               )}
 
-              {/* 3 — Job Details */}
+              {/* 3 — About Company */}
               {activeSection === 3 && (
                 <div className="space-y-4">
                   <SHead
-                    title="Job Details"
-                    sub="Role requirements and compensation"
+                    title="About Company"
+                    sub="Describe your organisation"
                   />
                   <Grid2>
-                    <F label="Designation / Role *">
-                      <input
-                        name="designation"
-                        value={formData.designation}
+                    <F label="About Company" span2>
+                      <textarea
+                        name="about"
+                        value={formData.about}
                         onChange={handleChange}
-                        placeholder="e.g. Senior React Developer"
-                        required
-                        className={inp}
+                        rows={4}
+                        className={inp + " resize-none"}
                       />
                     </F>
-                    <F label="Department">
-                      <input
-                        name="department"
-                        value={formData.department}
+
+                    <F label="Mission" span2>
+                      <textarea
+                        name="mission"
+                        value={formData.mission}
                         onChange={handleChange}
-                        placeholder="e.g. Engineering"
-                        className={inp}
+                        rows={2}
+                        className={inp + " resize-none"}
                       />
                     </F>
-                    <F label="Job Type">
-                      <select
-                        name="jobType"
-                        value={formData.jobType}
+
+                    <F label="Vision" span2>
+                      <textarea
+                        name="vision"
+                        value={formData.vision}
                         onChange={handleChange}
-                        className={inp}
-                      >
-                        <option value="">Select Type</option>
-                        {JOB_TYPES.map((t) => (
-                          <option key={t}>{t}</option>
-                        ))}
-                      </select>
-                    </F>
-                    <F label="No. of Openings">
-                      <input
-                        name="openings"
-                        value={formData.openings}
-                        onChange={handleChange}
-                        type="number"
-                        min="1"
-                        placeholder="e.g. 3"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Experience Required">
-                      <input
-                        name="experience"
-                        value={formData.experience}
-                        onChange={handleChange}
-                        placeholder="e.g. 2–4 years"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Application Deadline">
-                      <input
-                        name="deadline"
-                        value={formData.deadline}
-                        onChange={handleChange}
-                        type="date"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Salary Min (₹ LPA)">
-                      <input
-                        name="salaryMin"
-                        value={formData.salaryMin}
-                        onChange={handleChange}
-                        type="number"
-                        placeholder="e.g. 6"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Salary Max (₹ LPA)">
-                      <input
-                        name="salaryMax"
-                        value={formData.salaryMax}
-                        onChange={handleChange}
-                        type="number"
-                        placeholder="e.g. 12"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Key Skills Required" span2>
-                      <input
-                        name="skills"
-                        value={formData.skills}
-                        onChange={handleChange}
-                        placeholder="e.g. React, Node.js, TypeScript, REST APIs"
-                        className={inp}
+                        rows={2}
+                        className={inp + " resize-none"}
                       />
                     </F>
                   </Grid2>
                 </div>
               )}
 
-              {/* 4 — Package & Extra */}
+              {/* 4 — Job Positions */}
               {activeSection === 4 && (
-                <div className="space-y-5">
+                <div className="space-y-6">
+                  <SHead title="Job Positions" sub="Add open roles" />
+
+                  {formData.jobs.map((job, index) => (
+                    <div
+                      key={index}
+                      className="border border-gray-300 p-6 rounded-xl space-y-5 bg-gray-50"
+                    >
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {/* Job Title */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Job Title
+                          </label>
+                          <input
+                            className={inp}
+                            value={job.title}
+                            onChange={(e) =>
+                              updateJob(index, "title", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Department */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Department
+                          </label>
+                          <input
+                            className={inp}
+                            value={job.department}
+                            onChange={(e) =>
+                              updateJob(index, "department", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Job Type */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Job Type
+                          </label>
+                          <select
+                            className={inp}
+                            value={job.jobType}
+                            onChange={(e) =>
+                              updateJob(index, "jobType", e.target.value)
+                            }
+                          >
+                            <option value="">Select Job Type</option>
+                            {JOB_TYPES.map((t) => (
+                              <option key={t}>{t}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Workplace Type */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Workplace Type
+                          </label>
+                          <select
+                            className={inp}
+                            value={job.workplaceType}
+                            onChange={(e) =>
+                              updateJob(index, "workplaceType", e.target.value)
+                            }
+                          >
+                            <option value="">Select Workplace Type</option>
+                            <option>Remote</option>
+                            <option>Hybrid</option>
+                            <option>On-site</option>
+                          </select>
+                        </div>
+
+                        {/* Location */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Location
+                          </label>
+                          <input
+                            className={inp}
+                            value={job.location}
+                            onChange={(e) =>
+                              updateJob(index, "location", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Experience */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Experience
+                          </label>
+                          <input
+                            className={inp}
+                            value={job.exp}
+                            onChange={(e) =>
+                              updateJob(index, "exp", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Salary Min */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Salary Min (₹ LPA)
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            className={inp}
+                            value={job.salaryMin}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (/^\d*$/.test(value)) {
+                                updateJob(index, "salaryMin", value);
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {/* Salary Max */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Salary Max (₹ LPA)
+                          </label>
+                          <input
+                            type="number"
+                            className={inp}
+                            value={job.salaryMax}
+                            onChange={(e) =>
+                              updateJob(index, "salaryMax", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Deadline */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Application Deadline
+                          </label>
+                          <input
+                            type="date"
+                            className={inp}
+                            value={job.deadline}
+                            onChange={(e) =>
+                              updateJob(index, "deadline", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Job Description
+                          </label>
+                          <textarea
+                            rows={3}
+                            className={inp + " resize-none"}
+                            value={job.description}
+                            onChange={(e) =>
+                              updateJob(index, "description", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Skills */}
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Key Skills
+                          </label>
+
+                          <input
+                            placeholder="Type skill and press Enter"
+                            className={inp}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addSkill(index, e.target.value);
+                                e.target.value = "";
+                              }
+                            }}
+                          />
+
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {job.skills.map((skill, skillIndex) => (
+                              <span
+                                key={skillIndex}
+                                className="px-3 py-1 text-xs bg-[#eef3ff] text-[#1a3a6b] rounded-full flex items-center gap-2"
+                              >
+                                {skill}
+                                <button
+                                  type="button"
+                                  onClick={() => removeSkill(index, skillIndex)}
+                                  className="text-red-500 text-xs font-bold"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {formData.jobs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeJob(index)}
+                          className="text-red-500 text-sm font-medium"
+                        >
+                          Remove Job
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={addJob}
+                    disabled={
+                      formData.jobs.length >= Number(formData.openings || 0)
+                    }
+                    className={`px-4 py-2 rounded-lg text-sm
+    ${
+      formData.jobs.length >= Number(formData.openings || 0)
+        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+        : "bg-[#1a3a6b] text-white"
+    }
+  `}
+                  >
+                    + Add Job
+                  </button>
+                </div>
+              )}
+
+              {/* 5 — Why Join Us */}
+              {/* 5 — Why Join Us */}
+              {activeSection === 5 && (
+                <div className="space-y-6">
                   <SHead
-                    title="Package & Additional Info"
-                    sub="Choose your plan and provide extra details"
+                    title="Why Join Us"
+                    sub="Add company highlights that attract candidates"
                   />
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
-                      Package Type
-                    </label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {PACKAGES.map((pkg) => (
-                        <div
-                          key={pkg.value}
-                          onClick={() =>
-                            setFormData({ ...formData, packageType: pkg.value })
-                          }
-                          className={`pkg-card border-2 rounded-xl p-4 text-center
-                            ${formData.packageType === pkg.value ? "selected" : "border-gray-200 bg-gray-50"}`}
-                        >
-                          <div className="text-2xl mb-1.5">{pkg.icon}</div>
-                          <div className="font-semibold text-sm text-[#1a3a6b]">
-                            {pkg.label}
-                          </div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {pkg.jobs} job posts
-                          </div>
-                          {formData.packageType === pkg.value && (
-                            <span className="mt-2 inline-block bg-[#1a3a6b] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              Selected
-                            </span>
-                          )}
+                  {formData.whyJoinUs.map((item, index) => (
+                    <div
+                      key={index}
+                      className="border border-gray-200 p-6 rounded-xl space-y-4 bg-gray-50"
+                    >
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {/* Icon */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Icon (Emoji)
+                          </label>
+                          <input
+                            placeholder="e.g. 🚀"
+                            className={inp}
+                            value={item.icon}
+                            onChange={(e) =>
+                              updateHighlight(index, "icon", e.target.value)
+                            }
+                          />
                         </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  <Grid2>
-                    <F label="Contact Person Name">
-                      <input
-                        name="contactPerson"
-                        value={formData.contactPerson}
-                        onChange={handleChange}
-                        placeholder="e.g. Priya Sharma"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Contact Person Role">
-                      <input
-                        name="contactRole"
-                        value={formData.contactRole}
-                        onChange={handleChange}
-                        placeholder="e.g. HR Manager"
-                        className={inp}
-                      />
-                    </F>
-                    <F label="Additional Notes" span2>
-                      <textarea
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleChange}
-                        rows={3}
-                        placeholder="Any extra info to encode in the QR or display to applicants..."
-                        className={inp + " resize-none"}
-                      />
-                    </F>
-                  </Grid2>
+                        {/* Title */}
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Highlight Title
+                          </label>
+                          <input
+                            placeholder="e.g. Move Fast, Ship Often"
+                            className={inp}
+                            value={item.title}
+                            onChange={(e) =>
+                              updateHighlight(index, "title", e.target.value)
+                            }
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                            Description
+                          </label>
+                          <textarea
+                            rows={3}
+                            placeholder="Describe why candidates should join..."
+                            className={inp + " resize-none"}
+                            value={item.desc}
+                            onChange={(e) =>
+                              updateHighlight(index, "desc", e.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      {/* Remove button */}
+                      {formData.whyJoinUs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeHighlight(index)}
+                          className="text-red-500 text-sm font-medium"
+                        >
+                          Remove Highlight
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={addHighlight}
+                    className="px-4 py-2 bg-[#1a3a6b] text-white rounded-lg text-sm"
+                  >
+                    + Add Highlight
+                  </button>
                 </div>
               )}
 
@@ -603,10 +1049,11 @@ export default function CreateCompanyQR() {
                 ) : (
                   <button
                     type="submit"
+                    disabled={loading}
                     className="submit-btn px-7 py-2.5 rounded-xl text-white font-semibold text-sm
-                      flex items-center gap-2 shadow-md"
+    flex items-center gap-2 shadow-md disabled:opacity-50"
                   >
-                    ⬡ Generate QR
+                    {loading ? "Generating..." : "⬡ Generate QR"}
                   </button>
                 )}
               </div>
@@ -614,11 +1061,11 @@ export default function CreateCompanyQR() {
           </form>
 
           {/* ── QR Result ── */}
-          {submitted && qrPreview && (
+          {showQR && qrImage && (
             <div className="mt-6 bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col md:flex-row md:items-center gap-8 fade-up">
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl shrink-0">
                 <img
-                  src={qrPreview}
+                  src={qrImage}
                   alt="Generated QR"
                   className="w-40 h-40 block"
                 />
@@ -652,17 +1099,26 @@ export default function CreateCompanyQR() {
                 </span>
 
                 <div className="flex gap-3 mt-4 justify-center md:justify-start flex-wrap">
-                  <a
-                    href={qrPreview}
-                    download="company-qr.png"
-                    className="submit-btn px-5 py-2.5 rounded-xl text-white font-semibold text-sm shadow-sm"
+                  <button
+                    onClick={() =>
+                      dispatch(
+                        downloadQRPDF({
+                          token,
+                          companyName: formData.companyName,
+                        }),
+                      )
+                    }
+                    disabled={!token || downloading}
+                    className={`submit-btn px-5 py-2.5 rounded-xl text-white font-semibold text-sm shadow-sm
+    ${!token ? "opacity-50 cursor-not-allowed" : ""}
+  `}
                   >
-                    ↓ Download QR
-                  </a>
+                    {downloading ? "Downloading..." : "↓ Download PDF"}
+                  </button>
                   <button
                     onClick={() => {
-                      setQrPreview(null);
-                      setSubmitted(false);
+                      dispatch(resetQRState());
+                      setShowQR(false);
                       setActiveSection(0);
                     }}
                     className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm

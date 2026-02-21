@@ -1,8 +1,20 @@
 import { NavLink } from "react-router-dom";
 import logo from "../../assets/maven-logo.svg";
 import { crmSidebarMenu } from "../../config/crmMenuConfig";
+import { useSelector } from "react-redux";
 
 export default function Sidebar({ isOpen }) {
+  const { profile } = useSelector((state) => state.crm);
+
+  const normalizeRole = (role) => {
+    if (!role) return "";
+
+    return role
+      .toLowerCase()
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
   const navClass =
     "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all";
 
@@ -28,9 +40,7 @@ export default function Sidebar({ isOpen }) {
               to={item.path}
               className={({ isActive }) =>
                 `${navClass} ${
-                  isActive
-                    ? "bg-lime-400 text-black"
-                    : "hover:bg-white/10"
+                  isActive ? "bg-lime-400 text-black" : "hover:bg-white/10"
                 }`
               }
             >
@@ -45,14 +55,13 @@ export default function Sidebar({ isOpen }) {
       <div className="absolute bottom-4 left-4 right-4">
         <div className="flex items-center gap-3 bg-white/10 p-3 rounded-lg">
           <div className="w-9 h-9 rounded-full bg-gray-300 overflow-hidden">
-            <img
-              src="https://i.pravatar.cc/150?img=12"
-              alt="profile"
-            />
+            <img src="https://i.pravatar.cc/150?img=12" alt="profile" />
           </div>
           <div>
-            <p className="text-sm font-semibold">CRM Manager</p>
-            <p className="text-xs text-gray-300">Operations</p>
+            <p className="text-sm font-semibold">
+              {normalizeRole(profile?.role)}
+            </p>
+            <p className="text-xs text-gray-300">Sales Department</p>
           </div>
         </div>
       </div>
