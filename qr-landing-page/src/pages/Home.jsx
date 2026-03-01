@@ -9,7 +9,7 @@ import {
   HiShare,
   HiBookmark,
 } from "react-icons/hi";
-import { RiLinkedinBoxFill } from "react-icons/ri";
+import { RiFacebookBoxLine, RiInstagramLine, RiLinkedinBoxFill, RiTwitterXLine } from "react-icons/ri";
 import { MdVerified } from "react-icons/md";
 import {
   LinkedinShareButton,
@@ -88,6 +88,16 @@ export default function CompanyOverviewPage() {
   const tabs = ["Overview", "Jobs", "Why Join Us"];
   const toggleSave = (i) => setSavedJobs((p) => ({ ...p, [i]: !p[i] }));
 
+  const getEmbedMapUrl = () => {
+    if (!location?.address) return null;
+
+    const query = encodeURIComponent(
+      `${location.address}, ${location.city}, ${location.region}, ${location.pincode}`,
+    );
+
+    return `https://www.google.com/maps?q=${query}&output=embed`;
+  };
+
   if (loading) {
     return <div className="p-10 text-center">Loading...</div>;
   }
@@ -99,6 +109,27 @@ export default function CompanyOverviewPage() {
   if (!company) {
     return null;
   }
+
+  const {
+    logo,
+    name,
+    tagline,
+    industry,
+    employees,
+    size,
+    headquarters,
+    founded,
+    activelyHiring,
+    openings,
+    activeJobCount,
+    website,
+    googleMapLink,
+    about,
+    location = {},
+    socialLinks = {},
+    jobs = [],
+    whyJoinUs = [],
+  } = company;
 
   return (
     <AppLayout>
@@ -125,16 +156,26 @@ export default function CompanyOverviewPage() {
           <div className="max-w-6xl mx-auto px-6">
             <div className="relative -mt-28 bg-white rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.08)] border border-[#e6ecff] p-8 flex flex-col md:flex-row gap-8">
               {/* Logo */}
-              {/* <div className="shrink-0">
-                <div
-                  className="w-28 h-28 rounded-3xl flex items-center justify-center text-white text-3xl font-extrabold shadow-xl"
-                  style={{
-                    background: "linear-gradient(135deg,#0f2550,#2d5299)",
-                  }}
-                >
-                  TN
-                </div>
-              </div> */}
+              <div className="shrink-0">
+                {logo ? (
+                  <div className="shrink-0">
+                    <img
+                      src={logo}
+                      alt={name}
+                      className="w-28 h-28 object-contain rounded-3xl bg-white border border-[#e6ecff] p-4 shadow-xl"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="w-28 h-28 rounded-3xl flex items-center justify-center text-white text-3xl font-extrabold shadow-xl"
+                    style={{
+                      background: "linear-gradient(135deg,#0f2550,#2d5299)",
+                    }}
+                  >
+                    {name?.charAt(0)}
+                  </div>
+                )}
+              </div>
 
               {/* Company Info */}
               <div className="flex-1">
@@ -157,13 +198,14 @@ export default function CompanyOverviewPage() {
                     <HiOfficeBuilding /> {company.industry}
                   </span>
                   <span className="flex items-center gap-1">
-                    <HiUsers /> {company.employees || company.companySize}
+                    <HiUsers /> {company.employees || company.size}
                   </span>
                   <span className="flex items-center gap-1">
-                    <HiLocationMarker /> {company.hq}
+                    <HiLocationMarker />{" "}
+                    {company.headquarters || company.location?.city}
                   </span>
                   <span className="flex items-center gap-1">
-                    <HiCalendar /> Founded {company.foundedYear}
+                    <HiCalendar /> Founded {company.founded}
                   </span>
                 </div>
 
@@ -176,7 +218,7 @@ export default function CompanyOverviewPage() {
                   )}
 
                   <span className="px-4 py-1.5 text-xs font-semibold rounded-full bg-[#eef3ff] text-[#1a3c7a]">
-                    {company.openRoles || 0} Open Roles
+                    {company.openings || company.activeJobCount || 0} Open Roles
                   </span>
                 </div>
 
@@ -226,11 +268,14 @@ export default function CompanyOverviewPage() {
           {/* LEFT */}
           <div>
             {activeTab === "Overview" && (
-              <div className="bg-white/90 backdrop-blur rounded-2xl border border-[#e6ecff] shadow-lg p-8">
-                <SectionHeading title="About Company" />
-                <p className="text-[#4a5f82] leading-relaxed whitespace-pre-line">
-                  {company.about}
-                </p>
+              <div className="space-y-10">
+                {/* ABOUT */}
+                <div className="bg-white/90 backdrop-blur rounded-2xl border border-[#e6ecff] shadow-lg p-8">
+                  <SectionHeading title="About Company" />
+                  <p className="text-[#4a5f82] leading-relaxed whitespace-pre-line">
+                    {company.about}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -352,26 +397,89 @@ export default function CompanyOverviewPage() {
           {/* RIGHT SIDEBAR */}
           <div className="sticky top-28 space-y-6">
             <div className="bg-white rounded-2xl border border-[#e6ecff] p-6 shadow-md">
-              <h3 className="font-bold text-[#1a3c7a] mb-4">Company Facts</h3>
-              <div className="space-y-4 text-sm">
-                <div>{company.industry}</div>
-                <div>{company.employees}</div>
-                <div>{company.hq}</div>
-                <div>{company.founded}</div>
-              </div>
+              {location?.address && (
+                <div className="">
+                  <h3 className="font-bold text-[#1a3c7a] mb-4">Location</h3>
+
+                  {getEmbedMapUrl() && (
+                    <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm mb-4">
+                      <iframe
+                        title="Company Location"
+                        src={getEmbedMapUrl()}
+                        width="100%"
+                        height="220"
+                        loading="lazy"
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+
+                  <div className="text-sm text-[#4a5f82] space-y-1">
+                    <div>{location.address}</div>
+                    <div>
+                      {location.city}, {location.region}
+                    </div>
+                    <div>
+                      {location.country} – {location.pincode}
+                    </div>
+
+                    <a
+                      href={googleMapLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-2 text-sm font-semibold text-[#00a8b4] hover:underline"
+                    >
+                      Open in Google Maps →
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-2xl border border-[#e6ecff] p-6 shadow-md">
               <h3 className="font-bold text-[#1a3c7a] mb-4">Follow Us</h3>
               <div className="flex gap-4 text-2xl">
-                {company.linkedIn && (
+                {socialLinks?.linkedin?.startsWith("http") && (
                   <a
-                    href={company.linkedIn}
+                    href={company.socialLinks.linkedin}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[#0A66C2] hover:scale-110 transition"
                   >
                     <RiLinkedinBoxFill />
+                  </a>
+                )}
+
+                {socialLinks?.twitter?.startsWith("http") && (
+                  <a
+                    href={company.socialLinks.twitter}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-black hover:scale-110 transition"
+                  >
+                    <RiTwitterXLine />
+                  </a>
+                )}
+
+                {socialLinks?.instagram?.startsWith("http") && (
+                  <a
+                    href={company.socialLinks.instagram}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-pink-500 hover:scale-110 transition"
+                  >
+                    <RiInstagramLine />
+                  </a>
+                )}
+
+                {socialLinks?.facebook?.startsWith("http") && (
+                  <a
+                    href={company.socialLinks.facebook}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:scale-110 transition"
+                  >
+                    <RiFacebookBoxLine />
                   </a>
                 )}
               </div>

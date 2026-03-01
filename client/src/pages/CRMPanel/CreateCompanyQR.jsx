@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   INDUSTRIES,
   COMPANY_SIZES,
   JOB_TYPES,
   SECTIONS,
+  EMPLOYEE_COUNT_OPTIONS,
 } from "../../Data/dummyData";
 import { useDispatch, useSelector } from "react-redux";
 import { downloadQRPDF, generateQR } from "../../Redux/thunks/qrThunks";
 import { resetQRState } from "../../Redux/slices/qrSlice";
 import { calcProgress } from "../../services/Progressfix";
-import { useEffect } from "react";
+import { Country, State, City } from "country-state-city";
 
 export default function CreateCompanyQR() {
   const [formData, setFormData] = useState({
@@ -17,14 +18,23 @@ export default function CreateCompanyQR() {
     companyName: "",
     tagline: "",
     industry: "",
+    industryOther: "",
+    logo: null,
+    logoPreview: "",
     companySize: "",
     foundedYear: "",
-    employeesCount: "", // NEW (used in overview)
-    headquarters: "", // NEW (HQ display)
+    employeesCount: "",
+    headquarters: "",
     website: "",
-    linkedIn: "",
-    activelyHiring: true, // NEW (used in hero badges)
-    openings: "", // NEW (used in hero badge)
+    googleMapLink: "",
+    socialLinks: {
+      linkedin: "",
+      twitter: "",
+      instagram: "",
+      facebook: "",
+    },
+    activelyHiring: true,
+    openings: "",
 
     // ── Contact Info ──
     email: "",
@@ -63,6 +73,7 @@ export default function CreateCompanyQR() {
         exp: "",
         salaryMin: "",
         salaryMax: "",
+        hideSalary: false,
         skills: [],
         deadline: "",
         description: "",
@@ -82,13 +93,28 @@ export default function CreateCompanyQR() {
   const [activeSection, setActiveSection] = useState(0);
 
   const [showQR, setShowQR] = useState(false);
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+  const fileInputRef = useRef(null);
 
   const dispatch = useDispatch();
   const { loading, error, qrImage, redirectUrl, token, downloading } =
     useSelector((state) => state.qr);
 
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === "industry" && value !== "Other") {
+      setFormData({
+        ...formData,
+        industry: value,
+        industryOther: "",
+      });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
+  };
 
   useEffect(() => {
     const maxJobs = Number(formData.openings || 0);
@@ -124,10 +150,60 @@ export default function CreateCompanyQR() {
     });
   }, [formData.openings]);
 
+  useEffect(() => {
+    const allCountries = Country.getAllCountries();
+    setCountries(allCountries);
+  }, []);
+
+  useEffect(() => {
+    if (!formData.country) return;
+
+    const selectedCountry = countries.find((c) => c.name === formData.country);
+
+    if (!selectedCountry) return;
+
+    const countryStates = State.getStatesOfCountry(selectedCountry.isoCode);
+
+    setStates(countryStates);
+    setCities([]);
+
+    setFormData((prev) => ({
+      ...prev,
+      region: "",
+      city: "",
+    }));
+  }, [formData.country]);
+
+  useEffect(() => {
+    if (!formData.region) return;
+
+    const selectedCountry = countries.find((c) => c.name === formData.country);
+
+    const selectedState = states.find((s) => s.name === formData.region);
+
+    if (!selectedCountry || !selectedState) return;
+
+    const stateCities = City.getCitiesOfState(
+      selectedCountry.isoCode,
+      selectedState.isoCode,
+    );
+
+    setCities(stateCities);
+
+    setFormData((prev) => ({
+      ...prev,
+      city: "",
+    }));
+  }, [formData.region]);
+
   const validateForm = () => {
     if (!formData.companyName.trim()) return "Company name is required";
 
+    // if (!formData.industry) return "Industry is required";
     if (!formData.industry) return "Industry is required";
+
+    if (formData.industry === "Other" && !formData.industryOther.trim())
+      return "Please specify your industry";
 
     if (!formData.email.match(/^\S+@\S+\.\S+$/)) return "Invalid email format";
 
@@ -154,13 +230,18 @@ export default function CreateCompanyQR() {
       company: {
         name: formData.companyName,
         tagline: formData.tagline,
-        industry: formData.industry,
+        // industry: formData.industry,
+        industry:
+          formData.industry === "Other"
+            ? formData.industryOther
+            : formData.industry,
         size: formData.companySize,
         founded: formData.foundedYear,
         employees: formData.employeesCount,
         headquarters: formData.headquarters || formData.city,
         website: formData.website,
-        linkedIn: formData.linkedIn,
+        googleMapLink: formData.googleMapLink,
+        socialLinks: formData.socialLinks,
         activelyHiring: formData.activelyHiring,
         openings: formData.openings,
         contact: {
@@ -193,7 +274,16 @@ export default function CreateCompanyQR() {
       ),
     };
 
-    const result = await dispatch(generateQR(payload));
+    // const result = await dispatch(generateQR(payload));
+    const formDataToSend = new FormData();
+
+    formDataToSend.append("data", JSON.stringify(payload));
+
+    if (formData.logo) {
+      formDataToSend.append("logo", formData.logo);
+    }
+
+    const result = await dispatch(generateQR(formDataToSend));
 
     if (generateQR.fulfilled.match(result)) {
       setShowQR(true); // 👈 Only show after success
@@ -294,6 +384,58 @@ export default function CreateCompanyQR() {
     }));
   };
 
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate type
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload a valid image file.");
+      return;
+    }
+
+    // Validate size (2MB example)
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Logo must be under 2MB.");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    setFormData((prev) => ({
+      ...prev,
+      logo: file,
+      logoPreview: previewUrl,
+    }));
+  };
+
+  const handleRemoveLogo = () => {
+    if (formData.logoPreview) {
+      URL.revokeObjectURL(formData.logoPreview); // prevent memory leak
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      logo: null,
+      logoPreview: "",
+    }));
+
+    // Reset file input value (important!)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSocialChange = (platform, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      socialLinks: {
+        ...prev.socialLinks,
+        [platform]: value,
+      },
+    }));
+  };
+
   const progress = calcProgress(formData);
 
   const inp = `
@@ -302,6 +444,17 @@ export default function CreateCompanyQR() {
     focus:outline-none focus:border-[#1a3a6b] focus:ring-2 focus:ring-[#1a3a6b]/10
     transition-all duration-150
   `;
+
+  const selectClass = `
+  w-full appearance-none
+  border border-gray-200 rounded-xl
+  px-4 py-2.5 pr-10 text-sm text-gray-800
+  bg-white
+  focus:outline-none focus:border-[#1a3a6b]
+  focus:ring-2 focus:ring-[#1a3a6b]/10
+  hover:border-gray-300
+  transition-all duration-150
+`;
 
   return (
     <div
@@ -347,6 +500,14 @@ export default function CreateCompanyQR() {
 
         input[type="date"]::-webkit-calendar-picker-indicator {
           opacity: 0.5; cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease forwards;
         }
       `}</style>
 
@@ -408,6 +569,75 @@ export default function CreateCompanyQR() {
                     sub="Basic details about your organisation"
                   />
                   <Grid2>
+                    <F label="Company Logo">
+                      <div className="flex items-center gap-6">
+                        {/* Preview / Upload Box */}
+                        <div className="relative">
+                          <label
+                            htmlFor="logoUpload"
+                            className={`
+          w-28 h-28 flex flex-col items-center justify-center
+          border-2 border-dashed rounded-xl cursor-pointer
+          transition-all duration-200
+          ${
+            formData.logoPreview
+              ? "border-gray-200 bg-white"
+              : "border-gray-300 hover:border-[#1a3a6b] hover:bg-[#f8faff]"
+          }
+        `}
+                          >
+                            {formData.logoPreview ? (
+                              <img
+                                src={formData.logoPreview}
+                                alt="Company Logo"
+                                className="w-full h-full object-contain p-3"
+                              />
+                            ) : (
+                              <div className="text-center px-2">
+                                <div className="text-2xl mb-1">📷</div>
+                                <p className="text-xs text-gray-500 leading-tight">
+                                  Click to upload
+                                </p>
+                              </div>
+                            )}
+                          </label>
+
+                          {/* Hidden Input */}
+                          <input
+                            id="logoUpload"
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                          />
+
+                          {/* Remove Button */}
+                          {formData.logoPreview && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveLogo}
+                              className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center
+                     bg-red-500 text-white text-sm rounded-full shadow-md
+                     hover:bg-red-600 transition"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Info Text */}
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <p className="font-medium text-gray-700">
+                            Upload Company Logo
+                          </p>
+                          <p className="text-xs">PNG, JPG or SVG • Max 2MB</p>
+                          <p className="text-xs text-gray-400">
+                            Recommended size: 300×300px
+                          </p>
+                        </div>
+                      </div>
+                    </F>
                     <F label="Company Name *" span2>
                       <input
                         name="companyName"
@@ -427,32 +657,49 @@ export default function CreateCompanyQR() {
                         className={inp}
                       />
                     </F>
-                    <F label="Industry *">
-                      <select
-                        name="industry"
-                        value={formData.industry}
-                        onChange={handleChange}
-                        className={inp}
-                        required
-                      >
-                        <option value="">Select Industry</option>
-                        {INDUSTRIES.map((i) => (
-                          <option key={i}>{i}</option>
-                        ))}
-                      </select>
+                    <F>
+                      <div className="relative">
+                        <CustomSelect
+                          label="Industry"
+                          value={formData.industry}
+                          required
+                          placeholder="Select Industry"
+                          options={[...INDUSTRIES, "Other"]}
+                          onChange={(val) =>
+                            setFormData({
+                              ...formData,
+                              industry: val,
+                              industryOther:
+                                val !== "Other" ? "" : formData.industryOther,
+                            })
+                          }
+                        />
+                      </div>
                     </F>
-                    <F label="Company Size">
-                      <select
-                        name="companySize"
+                    {formData.industry === "Other" && (
+                      <div className="animate-fadeIn">
+                        <F label="Specify Industry *">
+                          <input
+                            name="industryOther"
+                            value={formData.industryOther}
+                            onChange={handleChange}
+                            placeholder="Enter your industry"
+                            className={inp}
+                            required
+                          />
+                        </F>
+                      </div>
+                    )}
+                    <F>
+                      <CustomSelect
+                        label="Company Size"
                         value={formData.companySize}
-                        onChange={handleChange}
-                        className={inp}
-                      >
-                        <option value="">Select Size</option>
-                        {COMPANY_SIZES.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
+                        placeholder="Select Size"
+                        options={COMPANY_SIZES}
+                        onChange={(val) =>
+                          setFormData({ ...formData, companySize: val })
+                        }
+                      />
                     </F>
                     <F label="Founded Year">
                       <input
@@ -468,13 +715,15 @@ export default function CreateCompanyQR() {
                       />
                     </F>
 
-                    <F label="Employees Count">
-                      <input
-                        name="employeesCount"
+                    <F>
+                      <CustomSelect
+                        label="Employees Count"
                         value={formData.employeesCount}
-                        onChange={handleNumberInput}
-                        placeholder="e.g. 1,001–5,000"
-                        className={inp}
+                        placeholder="Select Employee Range"
+                        options={EMPLOYEE_COUNT_OPTIONS}
+                        onChange={(val) =>
+                          setFormData({ ...formData, employeesCount: val })
+                        }
                       />
                     </F>
 
@@ -556,13 +805,50 @@ export default function CreateCompanyQR() {
                         className={inp}
                       />
                     </F>
-                    <F label="LinkedIn URL" span2>
+                    <F label="LinkedIn URL">
                       <input
-                        name="linkedIn"
-                        value={formData.linkedIn}
-                        onChange={handleChange}
                         type="url"
                         placeholder="https://linkedin.com/company/yourcompany"
+                        value={formData.socialLinks.linkedin}
+                        onChange={(e) =>
+                          handleSocialChange("linkedin", e.target.value)
+                        }
+                        className={inp}
+                      />
+                    </F>
+
+                    <F label="Twitter (X)">
+                      <input
+                        type="url"
+                        placeholder="https://twitter.com/yourcompany"
+                        value={formData.socialLinks.twitter}
+                        onChange={(e) =>
+                          handleSocialChange("twitter", e.target.value)
+                        }
+                        className={inp}
+                      />
+                    </F>
+
+                    <F label="Instagram">
+                      <input
+                        type="url"
+                        placeholder="https://instagram.com/yourcompany"
+                        value={formData.socialLinks.instagram}
+                        onChange={(e) =>
+                          handleSocialChange("instagram", e.target.value)
+                        }
+                        className={inp}
+                      />
+                    </F>
+
+                    <F label="Facebook">
+                      <input
+                        type="url"
+                        placeholder="https://facebook.com/yourcompany"
+                        value={formData.socialLinks.facebook}
+                        onChange={(e) =>
+                          handleSocialChange("facebook", e.target.value)
+                        }
                         className={inp}
                       />
                     </F>
@@ -577,33 +863,51 @@ export default function CreateCompanyQR() {
                     title="Location"
                     sub="Office address and regional details"
                   />
+                  <F label="Google Maps Profile Link">
+                    <input
+                      name="googleMapLink"
+                      type="url"
+                      value={formData.googleMapLink}
+                      onChange={handleChange}
+                      placeholder="https://maps.google.com/?cid=..."
+                      className={inp}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Paste your Google Business profile or location link.
+                    </p>
+                  </F>
                   <Grid2>
-                    <F label="Country">
-                      <input
-                        name="country"
+                    <F>
+                      <CustomSelect
+                        label="Country"
                         value={formData.country}
-                        onChange={handleChange}
-                        placeholder="e.g. India"
-                        className={inp}
+                        placeholder="Select Country"
+                        options={countries.map((c) => c.name)}
+                        onChange={(val) =>
+                          setFormData({ ...formData, country: val })
+                        }
                       />
                     </F>
-                    <F label="State / Region">
-                      <input
-                        name="region"
+                    <F>
+                      <CustomSelect
+                        label="State / Region"
                         value={formData.region}
-                        onChange={handleChange}
-                        placeholder="e.g. Uttarakhand"
-                        className={inp}
+                        placeholder="Select State"
+                        options={states.map((s) => s.name)}
+                        onChange={(val) =>
+                          setFormData({ ...formData, region: val })
+                        }
                       />
                     </F>
-                    <F label="City *">
-                      <input
-                        name="city"
+                    <F>
+                      <CustomSelect
+                        label="City *"
                         value={formData.city}
-                        onChange={handleChange}
-                        placeholder="e.g. Dehradun"
-                        required
-                        className={inp}
+                        placeholder="Select City"
+                        options={cities.map((c) => c.name)}
+                        onChange={(val) =>
+                          setFormData({ ...formData, city: val })
+                        }
                       />
                     </F>
                     <F label="Zone / Area">
@@ -720,41 +1024,42 @@ export default function CreateCompanyQR() {
 
                         {/* Job Type */}
                         <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                            Job Type
-                          </label>
-                          <select
-                            className={inp}
+                          <CustomSelect
+                            label="Job Type"
                             value={job.jobType}
-                            onChange={(e) =>
-                              updateJob(index, "jobType", e.target.value)
-                            }
-                          >
-                            <option value="">Select Job Type</option>
-                            {JOB_TYPES.map((t) => (
-                              <option key={t}>{t}</option>
-                            ))}
-                          </select>
+                            placeholder="Select Job Type"
+                            options={JOB_TYPES}
+                            onChange={(val) => updateJob(index, "jobType", val)}
+                          />
                         </div>
 
                         {/* Workplace Type */}
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                            Workplace Type
-                          </label>
-                          <select
-                            className={inp}
-                            value={job.workplaceType}
-                            onChange={(e) =>
-                              updateJob(index, "workplaceType", e.target.value)
-                            }
-                          >
-                            <option value="">Select Workplace Type</option>
-                            <option>Remote</option>
-                            <option>Hybrid</option>
-                            <option>On-site</option>
-                          </select>
-                        </div>
+<div>
+  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+    Workplace Type
+  </label>
+
+  <div className="flex gap-2">
+    {["Remote", "Hybrid", "On-site"].map((type) => (
+      <button
+        key={type}
+        type="button"
+        onClick={() => updateJob(index, "workplaceType", type)}
+        className={`
+          flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150
+          border
+          ${
+            job.workplaceType === type
+              ? "bg-[#1a3a6b] text-white border-[#1a3a6b]"
+              : "bg-white text-gray-600 border-gray-200 hover:border-[#1a3a6b] hover:bg-[#f5f8ff]"
+          }
+        `}
+      >
+        {type}
+      </button>
+    ))}
+  </div>
+</div>
 
                         {/* Location */}
                         <div>
@@ -784,40 +1089,62 @@ export default function CreateCompanyQR() {
                           />
                         </div>
 
-                        {/* Salary Min */}
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                            Salary Min (₹ LPA)
-                          </label>
+                        <div className="md:col-span-2 flex items-center gap-3">
                           <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            className={inp}
-                            value={job.salaryMin}
+                            type="checkbox"
+                            checked={job.hideSalary}
                             onChange={(e) => {
-                              const value = e.target.value;
-                              if (/^\d*$/.test(value)) {
-                                updateJob(index, "salaryMin", value);
+                              updateJob(index, "hideSalary", e.target.checked);
+
+                              if (e.target.checked) {
+                                updateJob(index, "salaryMin", "");
+                                updateJob(index, "salaryMax", "");
                               }
                             }}
+                            className="w-4 h-4 accent-[#1a3a6b]"
                           />
-                        </div>
-
-                        {/* Salary Max */}
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                            Salary Max (₹ LPA)
+                          <label className="text-sm font-medium text-gray-600">
+                            Do not display CTC for this job
                           </label>
-                          <input
-                            type="number"
-                            className={inp}
-                            value={job.salaryMax}
-                            onChange={(e) =>
-                              updateJob(index, "salaryMax", e.target.value)
-                            }
-                          />
                         </div>
+                        {!job.hideSalary && (
+                          <>
+                            {/* Salary Min */}
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                                Salary Min (₹ LPA)
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                className={inp}
+                                value={job.salaryMin}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (/^\d*$/.test(value)) {
+                                    updateJob(index, "salaryMin", value);
+                                  }
+                                }}
+                              />
+                            </div>
+
+                            {/* Salary Max */}
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                                Salary Max (₹ LPA)
+                              </label>
+                              <input
+                                type="number"
+                                className={inp}
+                                value={job.salaryMax}
+                                onChange={(e) =>
+                                  updateJob(index, "salaryMax", e.target.value)
+                                }
+                              />
+                            </div>
+                          </>
+                        )}
 
                         {/* Deadline */}
                         <div>
@@ -918,7 +1245,6 @@ export default function CreateCompanyQR() {
                 </div>
               )}
 
-              {/* 5 — Why Join Us */}
               {/* 5 — Why Join Us */}
               {activeSection === 5 && (
                 <div className="space-y-6">
@@ -1085,11 +1411,15 @@ export default function CreateCompanyQR() {
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
-                {formData.salaryMin && formData.salaryMax && (
-                  <p className="text-[#1a3a6b] font-semibold text-sm mt-1">
-                    ₹{formData.salaryMin}–{formData.salaryMax} LPA
-                  </p>
-                )}
+                {formData.jobs[0] &&
+                  !formData.jobs[0].hideSalary &&
+                  formData.jobs[0].salaryMin &&
+                  formData.jobs[0].salaryMax && (
+                    <p className="text-[#1a3a6b] font-semibold text-sm mt-1">
+                      ₹{formData.jobs[0].salaryMin}–{formData.jobs[0].salaryMax}{" "}
+                      LPA
+                    </p>
+                  )}
                 <span
                   className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full
                   bg-green-50 border border-green-200 text-green-700 text-xs font-semibold"
@@ -1127,6 +1457,43 @@ export default function CreateCompanyQR() {
                     ↺ Reset Form
                   </button>
                 </div>
+                {redirectUrl && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500 mb-1">
+                      Public Page URL
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={redirectUrl}
+                        readOnly
+                        className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg bg-gray-50"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard.writeText(redirectUrl)
+                        }
+                        className="px-3 py-2 text-xs bg-[#1a3a6b] text-white rounded-lg"
+                      >
+                        Copy
+                      </button>
+
+                      <a
+                        href={redirectUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 text-xs border border-gray-200 rounded-lg hover:bg-gray-50"
+                      >
+                        Open
+                      </a>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      This link can be shared directly without scanning the QR.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1159,6 +1526,141 @@ function F({ label, children, span2 }) {
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+function CustomSelect({
+  label,
+  value,
+  onChange,
+  options = [],
+  placeholder = "Select option",
+  required = false,
+  span2 = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const wrapperRef = useRef(null);
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (open && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [open]);
+
+  const filteredOptions = options.filter((opt) =>
+    opt.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className={span2 ? "md:col-span-2" : ""}>
+      {label && (
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+          {label} {required && "*"}
+        </label>
+      )}
+
+      <div ref={wrapperRef} className="relative">
+        {/* Trigger */}
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="
+            w-full flex items-center justify-between
+            border border-gray-200 rounded-xl
+            px-4 py-2.5 text-sm
+            bg-white
+            hover:border-gray-300
+            focus:outline-none focus:ring-2 focus:ring-[#1a3a6b]/10
+            transition-all
+          "
+        >
+          <span className={value ? "text-gray-800" : "text-gray-400"}>
+            {value || placeholder}
+          </span>
+
+          <svg
+            className={`w-4 h-4 transition-transform ${
+              open ? "rotate-180" : ""
+            }`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+
+        {/* Dropdown */}
+        {open && (
+          <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-lg animate-fadeIn">
+            {/* Search Field */}
+            <div className="p-2 border-b border-gray-100">
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="
+                  w-full px-3 py-2 text-sm
+                  border border-gray-200 rounded-lg
+                  focus:outline-none focus:ring-2 focus:ring-[#1a3a6b]/10
+                "
+              />
+            </div>
+
+            {/* Options */}
+            <div className="max-h-60 overflow-y-auto">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((opt) => (
+                  <div
+                    key={opt}
+                    onClick={() => {
+                      onChange(opt);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                    className={`
+                      px-4 py-2.5 text-sm cursor-pointer
+                      hover:bg-[#eef2f9]
+                      ${
+                        value === opt
+                          ? "bg-[#1a3a6b] text-white"
+                          : "text-gray-700"
+                      }
+                    `}
+                  >
+                    {opt}
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm text-gray-400">
+                  No results found
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

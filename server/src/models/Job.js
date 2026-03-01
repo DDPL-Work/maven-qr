@@ -20,15 +20,16 @@ const jobSchema = new mongoose.Schema(
     salaryMin: { type: Number, min: 0 },
     salaryMax: { type: Number, min: 0 },
 
+    hideSalary: { type: Boolean, default: false },
+
     skills: [String],
 
     deadline: Date,
-
     description: String,
 
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 jobSchema.index({ companyId: 1, isActive: 1 });

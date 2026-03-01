@@ -26,7 +26,7 @@ const STEP_CONFIG = [
   // 1 — Contact
   {
     required: ["email", "phone"],
-    partial: ["altPhone", "website", "linkedIn"],
+    partial: ["altPhone", "website"],
   },
   // 2 — Location
   {

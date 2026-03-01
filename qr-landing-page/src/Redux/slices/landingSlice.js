@@ -18,8 +18,8 @@ const landingSlice = createSlice({
       })
       .addCase(fetchLandingData.fulfilled, (state, action) => {
         state.loading = false;
-        state.company = action.payload.company;
-        state.scans = action.payload.scans;
+        state.company = action.payload.company; // ✅ FIX
+        state.scans = action.payload.scans || 0; // ✅ FIX
       })
       .addCase(fetchLandingData.rejected, (state, action) => {
         state.loading = false;

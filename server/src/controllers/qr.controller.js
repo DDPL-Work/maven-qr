@@ -15,41 +15,87 @@ CREATE COMPANY + JOB + QR + PDF UPLOAD
 */
 exports.createCompanyAndGenerateQR = async (req, res) => {
   try {
-    const { company, about, mission, vision, jobs, whyJoinUs } = req.body;
+    /*
+    ========================================
+    0️⃣ Parse FormData JSON
+    ========================================
+    */
 
-    if (!company) {
+    if (!req.body.data) {
       return res.status(400).json({
         success: false,
-        message: "Company data is required",
+        message: "Missing payload data",
+      });
+    }
+
+    const parsed = JSON.parse(req.body.data);
+    const { company, about, mission, vision, jobs, whyJoinUs } = parsed;
+
+    if (!company?.name || !company?.contact?.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Company name and email are required",
       });
     }
 
     /*
     ========================================
-    1️⃣ Create Company
+    1️⃣ Optional Logo Upload (Cloudinary)
+    ========================================
+    */
+
+    let logoUrl = null;
+    let logoPublicId = null;
+
+    if (req.file) {
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "company_logos",
+            resource_type: "image",
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          },
+        );
+
+        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      });
+
+      logoUrl = uploadResult.secure_url;
+      logoPublicId = uploadResult.public_id;
+    }
+
+    /*
+    ========================================
+    2️⃣ Create Company
     ========================================
     */
 
     const newCompany = await Company.create({
-      // ───────── BASIC INFO ─────────
       name: company.name,
       tagline: company.tagline,
       industry: company.industry,
-      companySize: company.size,
-      foundedYear: company.founded,
-      employeesCount: company.employees,
+
+      size: company.size,
+      founded: company.founded,
+      employees: company.employees,
       headquarters: company.headquarters,
-      activelyHiring: company.activelyHiring,
-      openRoles: Number(company.openings),
 
-      // ───────── CONTACT ─────────
-      email: company.contact?.email,
-      phone: company.contact?.phone,
-      altPhone: company.contact?.altPhone,
       website: company.website,
-      linkedIn: company.linkedIn,
+      googleMapLink: company.googleMapLink,
+      socialLinks: company.socialLinks,
 
-      // ───────── LOCATION ─────────
+      activelyHiring: company.activelyHiring,
+      openings: Number(company.openings || 0),
+
+      contact: {
+        email: company.contact?.email,
+        phone: company.contact?.phone,
+        altPhone: company.contact?.altPhone,
+      },
+
       location: {
         country: company.location?.country,
         region: company.location?.region,
@@ -59,12 +105,12 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
         pincode: company.location?.pincode,
       },
 
-      // ───────── CONTENT ─────────
       about,
       mission,
       vision,
       whyJoinUs,
 
+      logo: logoUrl,
 
       createdByCRM: req.user._id,
       status: "ACTIVE",
@@ -72,39 +118,41 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
 
     /*
     ========================================
-    2️⃣ Create Jobs
+    3️⃣ Create Jobs
     ========================================
     */
 
     if (jobs?.length) {
-      await Job.insertMany(
-        jobs.map((job) => ({
-          companyId: newCompany._id,
-          title: job.title,
-          department: job.department,
-          jobType: job.jobType,
-          workplaceType: job.workplaceType,
-          location: job.location,
-          experience: job.exp, // FIX HERE
-          salaryMin: job.salaryMin,
-          salaryMax: job.salaryMax,
-          skills: job.skills,
-          deadline: job.deadline,
-          description: job.description,
-        })),
-      );
+      const jobDocs = jobs.map((job) => ({
+        companyId: newCompany._id,
+        title: job.title,
+        department: job.department,
+        jobType: job.jobType,
+        workplaceType: job.workplaceType,
+        location: job.location,
+        experience: job.exp,
+        salaryMin: job.salaryMin || 0,
+        salaryMax: job.salaryMax || 0,
+        hideSalary: job.hideSalary || false,
+        skills: job.skills || [],
+        deadline: job.deadline || null,
+        description: job.description,
+      }));
 
-      newCompany.activeJobCount = jobs.length;
+      await Job.insertMany(jobDocs);
+
+      newCompany.activeJobCount = jobDocs.length;
       await newCompany.save();
     }
 
     /*
     ========================================
-    3️⃣ Generate Token + QR URL
+    4️⃣ Generate Token + Public URL
     ========================================
     */
 
     const token = crypto.randomUUID();
+
     const redirectUrl = `${process.env.FRONTEND_URL}/landing/${token}`;
 
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
@@ -113,17 +161,18 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
 
     /*
     ========================================
-    4️⃣ Fetch Jobs From DB (source of truth)
+    5️⃣ Fetch Jobs (Source of Truth)
     ========================================
     */
 
     const companyJobs = await Job.find({
       companyId: newCompany._id,
+      isActive: true,
     });
 
     /*
     ========================================
-    5️⃣ Generate Rich PDF (Service Layer)
+    6️⃣ Generate PDF
     ========================================
     */
 
@@ -135,7 +184,7 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
 
     /*
     ========================================
-    6️⃣ Upload PDF to Cloudinary
+    7️⃣ Upload PDF to Cloudinary
     ========================================
     */
 
@@ -158,7 +207,7 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
 
     /*
     ========================================
-    7️⃣ Save QR Record in DB
+    8️⃣ Save QR Record
     ========================================
     */
 
@@ -174,7 +223,7 @@ exports.createCompanyAndGenerateQR = async (req, res) => {
 
     /*
     ========================================
-    RESPONSE
+    SUCCESS RESPONSE
     ========================================
     */
 

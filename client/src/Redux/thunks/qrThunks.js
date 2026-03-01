@@ -17,7 +17,11 @@ export const generateQR = createAsyncThunk(
         // createdBy: user?.id, // send CRM user id
       };
 
-      const res = await api.post("/qr/generate", payload);
+      const res = await api.post("/qr/generate", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       return res.data;
     } catch (error) {
